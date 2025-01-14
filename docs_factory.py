@@ -1,3 +1,4 @@
+import streamlit as st
 from langchain_aws import ChatBedrock
 
 def generate_readme(readable_files):
@@ -10,12 +11,20 @@ def generate_readme(readable_files):
     Returns:
         str: Generated README content.
     """
+    # Accessing AWS credentials and Anthropic API key from secrets
+    aws_access_key_id = st.secrets["aws"]["access_key_id"]
+    aws_secret_access_key = st.secrets["aws"]["secret_access_key"]
+    aws_region = st.secrets["aws"]["region"]
+
+
     llm = ChatBedrock(
         model_id="anthropic.claude-3-sonnet-20240229-v1:0",
         model_kwargs=dict(temperature=0),
-        # Add other necessary parameters here
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region=aws_region,
+    
     )
-
     # Prepare the prompt for the model
     file_list = "\n".join(readable_files)
     prompt = (
