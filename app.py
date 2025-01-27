@@ -4,6 +4,7 @@ import subprocess
 import os
 import shutil
 import logging
+import re
 
 from docs_factory import generate_readme  # Import the generate_readme function
 
@@ -20,82 +21,89 @@ if 'readable_files' not in st.session_state:
 if 'readme_content' not in st.session_state:
     st.session_state.readme_content = None
 
-
 with st.sidebar:
     st.title("Auto README Generator")
     st.subheader("Easily generate a README.md file for your project.")
     st.markdown("---")
-    st.write("Tired of documentation? Let me do it for you! I will pull your files from github and generate documentation based off of your projects")
+    st.write("Tired of documentation? Let me do it for you! I will pull your files from GitHub and generate documentation based on your projects.")
 
-github_url = st.text_input("Enter your public GitHub repo URL (SSH format recommended)")
+github_url = st.text_input("Enter your public GitHub repo URL (HTTPS format recommended)")
+
+# Define a regex pattern for validating GitHub HTTPS URLs ending with .git
+url_pattern = r'^https://github\.com\/[\w\-]+\/[\w\-]+\.git$'
 
 if github_url:
-    st.write("Step 1. Pull Your Github Project Repo")
-    if st.button("Pull Repo"):
-        st.write(f"Requesting to pull your repo: {github_url}")
-        try:
-            # Create a temporary directory
-            temp_dir = tempfile.mkdtemp()
-            st.session_state.temp_dir = temp_dir
-            st.write(f"Cloning repository into temporary directory: {temp_dir}")
+    st.write("Step 1. Pull Your GitHub Project Repo")
+    
+    # Validate the GitHub URL
+    if not re.match(url_pattern, github_url):
+        st.error("Please enter a valid GitHub repository URL in the format: `https://github.com/username/repository.git`")
+    else:
+        if st.button("Pull Repo"):
+            st.write(f"Requesting to pull your repo: {github_url}")
+            try:
+                # Create a temporary directory
+                temp_dir = tempfile.mkdtemp()
+                st.session_state.temp_dir = temp_dir
+                st.write(f"Cloning repository into temporary directory: {temp_dir}")
 
-            # Execute the git clone command
-            with st.spinner("Cloning repository..."):
-                clone_result = subprocess.run(
-                    ["git", "clone", github_url, temp_dir],
-                    capture_output=True,
-                    text=True
-                )
+                # Execute the git clone command using HTTPS
+                with st.spinner("Cloning repository..."):
+                    clone_result = subprocess.run(
+                        ["git", "clone", github_url, temp_dir],
+                        capture_output=True,
+                        text=True
+                    )
 
-            if clone_result.returncode != 0:
-                st.error(f"Error cloning repository:\n{clone_result.stderr}")
-                logger.error(f"Git Clone Error: {clone_result.stderr}")
-                shutil.rmtree(temp_dir)  # Cleanup on failure
-                st.session_state.temp_dir = None
-            else:
-                st.success("Repository successfully cloned!")
-                logger.info("Repository successfully cloned.")
-
-                # Initialize a dictionary to store readable file paths and their contents
-                readable_files = {}
-
-                # Walk through the directory, excluding the .git folder
-                for root, dirs, files in os.walk(temp_dir):
-                    # Skip the .git directory
-                    if '.git' in dirs:
-                        dirs.remove('.git')  # Prevents os.walk from traversing the .git directory
-
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        try:
-                            # Attempt to open the file in text mode to check if it's readable
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                file_content = f.read()  # Read the file content
-                            # Get the relative path for better readability
-                            relative_path = os.path.relpath(file_path, temp_dir)
-                            readable_files[relative_path] = file_content
-                        except (UnicodeDecodeError, PermissionError):
-                            # Skip files that are not readable (e.g., binary files or permission issues)
-                            continue
-
-                # Update session state with readable files and their contents
-                st.session_state.readable_files = readable_files
-
-                if readable_files:
-                    st.write("### Readable Files in the Repository:")
-                    for file, content in readable_files.items():
-                        st.write(f"- {file}")
-                        with st.expander(f"View content of {file}"):
-                            st.code(content, language='python')  # Specify the language as needed
+                if clone_result.returncode != 0:
+                    st.error(f"Error cloning repository:\n{clone_result.stderr}")
+                    logger.error(f"Git Clone Error: {clone_result.stderr}")
+                    shutil.rmtree(temp_dir)  # Cleanup on failure
+                    st.session_state.temp_dir = None
                 else:
-                    st.write("No readable files found in the repository.")
+                    st.success("Repository successfully cloned!")
+                    logger.info("Repository successfully cloned.")
 
-        except subprocess.CalledProcessError as e:
-            st.error(f"An error occurred while cloning the repository: {e}")
-            logger.exception("Git Clone Failed")
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-            logger.exception("Unexpected Error during Cloning")
+                    # Initialize a dictionary to store readable file paths and their contents
+                    readable_files = {}
+
+                    # Walk through the directory, excluding the .git folder
+                    for root, dirs, files in os.walk(temp_dir):
+                        # Skip the .git directory
+                        if '.git' in dirs:
+                            dirs.remove('.git')  # Prevents os.walk from traversing the .git directory
+
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            try:
+                                # Attempt to open the file in text mode to check if it's readable
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    file_content = f.read()  # Read the file content
+                                # Get the relative path for better readability
+                                relative_path = os.path.relpath(file_path, temp_dir)
+                                readable_files[relative_path] = file_content
+                            except (UnicodeDecodeError, PermissionError):
+                                # Skip files that are not readable (e.g., binary files or permission issues)
+                                continue
+
+                    # Update session state with readable files and their contents
+                    st.session_state.readable_files = readable_files
+
+                    if readable_files:
+                        st.write("### Readable Files in the Repository:")
+                        for file, content in readable_files.items():
+                            st.write(f"- {file}")
+                            with st.expander(f"View content of {file}"):
+                                st.code(content, language='python')  # Specify the language as needed
+                    else:
+                        st.write("No readable files found in the repository.")
+
+            except subprocess.CalledProcessError as e:
+                st.error(f"An error occurred while cloning the repository: {e}")
+                logger.exception("Git Clone Failed")
+            except Exception as e:
+                st.error(f"An unexpected error occurred: {e}")
+                logger.exception("Unexpected Error during Cloning")
 
 # Display the Generate README button only if there are readable files
 if st.session_state.readable_files:
@@ -139,7 +147,7 @@ if st.session_state.readable_files:
 
 # Display the Push to Repository button only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
-    st.write("Step 3. Push Your New README File to Github and enjoy!")
+    st.write("Step 3. Push Your New README File to GitHub and Enjoy!")
     if st.button("Push to Repository"):
         try:
             temp_dir = st.session_state.temp_dir
