@@ -11,22 +11,26 @@ from docs_factory import generate_readme  # Import the generate_readme function
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-st.title("Auto README Generator")
-st.subheader("Easily generate a README.md file for your project.")
-
-st.markdown("---")
 
 # Initialize session state for temp_dir, readable_files, and readme_content
 if 'temp_dir' not in st.session_state:
     st.session_state.temp_dir = None
 if 'readable_files' not in st.session_state:
-    st.session_state.readable_files = []
+    st.session_state.readable_files = {}
 if 'readme_content' not in st.session_state:
     st.session_state.readme_content = None
+
+
+with st.sidebar:
+    st.title("Auto README Generator")
+    st.subheader("Easily generate a README.md file for your project.")
+    st.markdown("---")
+    st.write("Tired of documentation? Let me do it for you! I will pull your files from github and generate documentation based off of your projects")
 
 github_url = st.text_input("Enter your public GitHub repo URL (SSH format recommended)")
 
 if github_url:
+    st.write("Step 1. Pull Your Github Project Repo")
     if st.button("Pull Repo"):
         st.write(f"Requesting to pull your repo: {github_url}")
         try:
@@ -52,8 +56,8 @@ if github_url:
                 st.success("Repository successfully cloned!")
                 logger.info("Repository successfully cloned.")
 
-                # Initialize a list to store readable file paths
-                readable_files = []
+                # Initialize a dictionary to store readable file paths and their contents
+                readable_files = {}
 
                 # Walk through the directory, excluding the .git folder
                 for root, dirs, files in os.walk(temp_dir):
@@ -66,21 +70,23 @@ if github_url:
                         try:
                             # Attempt to open the file in text mode to check if it's readable
                             with open(file_path, 'r', encoding='utf-8') as f:
-                                f.read()  # Try reading the file to confirm it's a text file
+                                file_content = f.read()  # Read the file content
                             # Get the relative path for better readability
                             relative_path = os.path.relpath(file_path, temp_dir)
-                            readable_files.append(relative_path)
+                            readable_files[relative_path] = file_content
                         except (UnicodeDecodeError, PermissionError):
                             # Skip files that are not readable (e.g., binary files or permission issues)
                             continue
 
-                # Update session state with readable files
+                # Update session state with readable files and their contents
                 st.session_state.readable_files = readable_files
 
                 if readable_files:
                     st.write("### Readable Files in the Repository:")
-                    for file in readable_files:
+                    for file, content in readable_files.items():
                         st.write(f"- {file}")
+                        with st.expander(f"View content of {file}"):
+                            st.code(content, language='python')  # Specify the language as needed
                 else:
                     st.write("No readable files found in the repository.")
 
@@ -93,6 +99,7 @@ if github_url:
 
 # Display the Generate README button only if there are readable files
 if st.session_state.readable_files:
+    st.write("Step 2. Generate Your New README File")
     if st.button("Generate README"):
         try:
             temp_dir = st.session_state.temp_dir
@@ -132,6 +139,7 @@ if st.session_state.readable_files:
 
 # Display the Push to Repository button only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
+    st.write("Step 3. Push Your New README File to Github and enjoy!")
     if st.button("Push to Repository"):
         try:
             temp_dir = st.session_state.temp_dir
@@ -195,7 +203,7 @@ if st.session_state.readme_content and st.session_state.temp_dir:
                     st.write("Temporary directory has been cleaned up.")
                     # Reset session state
                     st.session_state.temp_dir = None
-                    st.session_state.readable_files = []
+                    st.session_state.readable_files = {}
                     st.session_state.readme_content = None
                 except PermissionError as pe:
                     st.warning(f"Could not delete temporary directory automatically: {pe}")

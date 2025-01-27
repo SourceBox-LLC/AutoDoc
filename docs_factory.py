@@ -3,10 +3,10 @@ from langchain_aws import ChatBedrock
 
 def generate_readme(readable_files):
     """
-    Generates README content based on the list of readable files using the Anthropic ChatBedrock model.
+    Generates README content based on the dictionary of readable files and their contents using the Anthropic ChatBedrock model.
 
     Args:
-        readable_files (list of str): List of file paths relative to the repository root.
+        readable_files (dict of str: str): Dictionary mapping file paths to their content.
 
     Returns:
         str: Generated README content.
@@ -26,11 +26,11 @@ def generate_readme(readable_files):
     
     )
     # Prepare the prompt for the model
-    file_list = "\n".join(readable_files)
+    files_info = "\n\n".join([f"### {file}\n{content}" for file, content in readable_files.items()])
     prompt = (
         "You are a helpful assistant that generates a comprehensive README.md file for a software project.\n\n"
-        "Here is a list of the project's readable files:\n"
-        f"{file_list}\n\n"
+        "Here is the content of the project's readable files:\n"
+        f"{files_info}\n\n"
         "Based on these files, generate a detailed README.md that includes sections like Introduction, Installation, Usage, and Contributing."
     )
 
