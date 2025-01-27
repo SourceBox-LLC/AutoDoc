@@ -5,6 +5,7 @@ import os
 import shutil
 import logging
 import re
+import json
 
 from docs_factory import generate_readme  # Import the generate_readme function
 
@@ -127,28 +128,51 @@ if st.session_state.readable_files:
 
                 st.success(f"README.md has been generated at `{readme_path}`.")
 
-                # Provide a download link for the README.md
-                st.download_button(
-                    label="Download README.md",
-                    data=readme_content,
-                    file_name="README.md",
-                    mime="text/markdown"
-                )
-
-                # Display the generated README with enhanced styling
+                # Display the generated README
                 st.markdown("### Generated README.md")
                 st.markdown("---")
-                st.markdown(readme_content, unsafe_allow_html=True)
+                st.text_area("README.md Content", readme_content, height=600, disabled=True)
             else:
                 st.error("No readable files available to generate README.")
         except Exception as e:
             st.error(f"An error occurred while generating README: {e}")
             logger.exception("README Generation Failed")
 
-# Display the Push to Repository button only if README has been generated
+# Display the Push to Repository section only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
-    st.write("Step 3. Push Your New README File to GitHub and Enjoy!")
+    st.write("Step 3. Copy or Push Your New README File to GitHub and Enjoy!")
+    
+    # Copy to Clipboard Button
+
+    if st.button("Copy to clipboard"):
+        # JavaScript code to copy the README content to the clipboard
+        readme_json = json.dumps(st.session_state.readme_content)
+        copy_js = f"""
+        <script>
+        navigator.clipboard.writeText({readme_json})
+            .then(() => {{
+                alert("README.md has been copied to the clipboard!");
+            }})
+            .catch(err => {{
+                alert("Failed to copy README.md: " + err);
+            }});
+        </script>
+        """
+        # Inject the JavaScript into the Streamlit app
+        st.markdown(copy_js, unsafe_allow_html=True)
+
+    # Provide a download button for the README
+    st.download_button(
+        label="Download README.md",
+        data=st.session_state.readme_content,
+        file_name="README.md",
+        mime="text/markdown"
+    )
+    
+    # Provide the Push to Repository Button
+    st.write("Experimental feature. May not work as expected.")
     if st.button("Push to Repository"):
+        st.write("Experimental feature. May not work as expected.")
         try:
             temp_dir = st.session_state.temp_dir
 
