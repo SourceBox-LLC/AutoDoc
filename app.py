@@ -146,125 +146,119 @@ if st.session_state.readable_files:
 
 # Display the Push to Repository section only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
-    st.write("Step 3. Copy, Download, Edit, or Push Your New README File to GitHub and Enjoy!")
-    
-    # Copy to Clipboard Button
-    if st.button("Copy to clipboard"):
+    st.write("Step 3. Manage Your Generated README.md")
 
-        # JavaScript code to copy the README content to the clipboard
-        readme_json = json.dumps(st.session_state.readme_content)
-        copy_js = f"""
-        <script>
-        navigator.clipboard.writeText({readme_json})
-            .then(() => {{
-                alert("README.md has been copied to the clipboard!");
-            }})
-            .catch(err => {{
-                alert("Failed to copy README.md: " + err);
-            }});
-        </script>
-        """
-        # Inject the JavaScript into the Streamlit app
-        st.markdown(copy_js, unsafe_allow_html=True)
-
-    # Provide a download button for the README
-    st.download_button(
-        label="Download README.md",
-        data=st.session_state.readme_content,
-        file_name="README.md",
-        mime="text/markdown"
-    )
-
-    # Button to open the Manual Edit page
+    # Always show the Edit button. When pressed, the manual edit mode is enabled.
     if st.button("Edit README.md"):
-        # Flag to render manual edit page continuously until updated
         st.session_state.edit_mode = "manual_edit"
-    
-    # If edit_mode is activated, render the manual edit page
+
     if st.session_state.get("edit_mode") == "manual_edit":
+        # When in edit mode, show only the manual editor (and a Finish Editing button to exit edit mode)
         st.write("### Manual Editing Mode")
-        # Call the manual edit page with the current README content. Capture the updated content.
         updated_content = manual_edit_page(st.session_state.readme_content)
-        # Save the updated content back to session state.
-        st.session_state.readme_content = updated_content
+        if st.button("Finish Editing"):
+            st.session_state.readme_content = updated_content
+            st.session_state.edit_mode = None
+            st.rerun()
+    else:
+        # Only display these buttons if NOT in edit mode.
+        if st.button("Copy to clipboard"):
+            readme_json = json.dumps(st.session_state.readme_content)
+            copy_js = f"""
+            <script>
+            navigator.clipboard.writeText({readme_json})
+                .then(() => {{
+                    alert("README.md has been copied to the clipboard!");
+                }})
+                .catch(err => {{
+                    alert("Failed to copy README.md: " + err);
+                }});
+            </script>
+            """
+            st.markdown(copy_js, unsafe_allow_html=True)
 
-    # Provide the Push to Repository Button
-    
-    if st.button("Push to Repository"):
-        st.write("Experimental feature. May not work as expected.")
-        try:
-            temp_dir = st.session_state.temp_dir
+        st.download_button(
+            label="Download README.md",
+            data=st.session_state.readme_content,
+            file_name="README.md",
+            mime="text/markdown"
+        )
 
-            if temp_dir:
-                # Navigate to the temporary directory
-                original_dir = os.getcwd()
-                os.chdir(temp_dir)
+        if st.button("Push to Repository"):
+            st.write("Experimental feature. May not work as expected.")
+            try:
+                temp_dir = st.session_state.temp_dir
 
-                # Configure Git user if not already set
-                subprocess.run(["git", "config", "user.name", "Auto README Generator"], check=True)
-                subprocess.run(["git", "config", "user.email", "auto-README-generator@example.com"], check=True)
+                if temp_dir:
+                    # Navigate to the temporary directory
+                    original_dir = os.getcwd()
+                    os.chdir(temp_dir)
 
-                # Stage the README.md file
-                add_result = subprocess.run(
-                    ["git", "add", "README.md"],
-                    capture_output=True,
-                    text=True
-                )
-                if add_result.returncode != 0:
-                    st.error(f"Error adding README.md to git:\n{add_result.stderr}")
-                    logger.error(f"Git Add Error: {add_result.stderr}")
-                    os.chdir(original_dir)
-                else:
-                    logger.info("README.md added to staging area.")
+                    # Configure Git user if not already set
+                    subprocess.run(["git", "config", "user.name", "Auto README Generator"], check=True)
+                    subprocess.run(["git", "config", "user.email", "auto-README-generator@example.com"], check=True)
 
-                # Commit the changes
-                commit_message = "Add generated README.md - Automated Commit"
-                commit_result = subprocess.run(
-                    ["git", "commit", "-m", commit_message],
-                    capture_output=True,
-                    text=True
-                )
-                if commit_result.returncode != 0:
-                    st.error(f"Error committing README.md:\n{commit_result.stderr}")
-                    logger.error(f"Git Commit Error: {commit_result.stderr}")
-                    os.chdir(original_dir)
-                else:
-                    st.success("README.md has been committed.")
-                    logger.info("README.md committed successfully.")
-
-                # Push the changes to the remote repository
-                with st.spinner("Pushing README.md to the repository..."):
-                    push_result = subprocess.run(
-                        ["git", "push"],
+                    # Stage the README.md file
+                    add_result = subprocess.run(
+                        ["git", "add", "README.md"],
                         capture_output=True,
                         text=True
                     )
+                    if add_result.returncode != 0:
+                        st.error(f"Error adding README.md to git:\n{add_result.stderr}")
+                        logger.error(f"Git Add Error: {add_result.stderr}")
+                        os.chdir(original_dir)
+                    else:
+                        logger.info("README.md added to staging area.")
 
-                if push_result.returncode != 0:
-                    st.error(f"Error pushing to repository:\n{push_result.stderr}")
-                    logger.error(f"Git Push Error: {push_result.stderr}")
+                    # Commit the changes
+                    commit_message = "Add generated README.md - Automated Commit"
+                    commit_result = subprocess.run(
+                        ["git", "commit", "-m", commit_message],
+                        capture_output=True,
+                        text=True
+                    )
+                    if commit_result.returncode != 0:
+                        st.error(f"Error committing README.md:\n{commit_result.stderr}")
+                        logger.error(f"Git Commit Error: {commit_result.stderr}")
+                        os.chdir(original_dir)
+                    else:
+                        st.success("README.md has been committed.")
+                        logger.info("README.md committed successfully.")
+
+                    # Push the changes to the remote repository
+                    with st.spinner("Pushing README.md to the repository..."):
+                        push_result = subprocess.run(
+                            ["git", "push"],
+                            capture_output=True,
+                            text=True
+                        )
+
+                    if push_result.returncode != 0:
+                        st.error(f"Error pushing to repository:\n{push_result.stderr}")
+                        logger.error(f"Git Push Error: {push_result.stderr}")
+                    else:
+                        st.success("README.md has been successfully pushed to the repository.")
+                        logger.info("README.md pushed successfully.")
+
+                    # Cleanup: Attempt to remove the temporary directory
+                    try:
+                        os.chdir(original_dir)
+                        shutil.rmtree(temp_dir)
+                        st.write("Temporary directory has been cleaned up.")
+                        # Reset session state
+                        st.session_state.temp_dir = None
+                        st.session_state.readable_files = {}
+                        st.session_state.readme_content = None
+                        st.session_state.edit_mode = None
+                    except PermissionError as pe:
+                        st.warning(f"Could not delete temporary directory automatically: {pe}")
+                        st.info(f"Please delete the temporary directory manually: `{temp_dir}`")
                 else:
-                    st.success("README.md has been successfully pushed to the repository.")
-                    logger.info("README.md pushed successfully.")
-
-                # Cleanup: Attempt to remove the temporary directory
-                try:
-                    os.chdir(original_dir)
-                    shutil.rmtree(temp_dir)
-                    st.write("Temporary directory has been cleaned up.")
-                    # Reset session state
-                    st.session_state.temp_dir = None
-                    st.session_state.readable_files = {}
-                    st.session_state.readme_content = None
-                    st.session_state.edit_mode = None
-                except PermissionError as pe:
-                    st.warning(f"Could not delete temporary directory automatically: {pe}")
-                    st.info(f"Please delete the temporary directory manually: `{temp_dir}`")
-            else:
-                st.error("Temporary directory not found.")
-        except subprocess.CalledProcessError as e:
-            st.error(f"An error occurred while pushing the README to the repository: {e}")
-            logger.exception("Git Push Failed")
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-            logger.exception("Unexpected Error during Push")
+                    st.error("Temporary directory not found.")
+            except subprocess.CalledProcessError as e:
+                st.error(f"An error occurred while pushing the README to the repository: {e}")
+                logger.exception("Git Push Failed")
+            except Exception as e:
+                st.error(f"An unexpected error occurred: {e}")
+                logger.exception("Unexpected Error during Push")
