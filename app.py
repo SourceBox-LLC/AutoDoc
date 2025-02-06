@@ -27,6 +27,8 @@ with st.sidebar:
     st.subheader("Easily generate a README.md file for your project.")
     st.markdown("---")
     st.write("Tired of documentation? Let me do it for you! I will pull your files from GitHub and generate documentation based on your projects.")
+    st.markdown("---")
+    
 
 github_url = st.text_input("Enter your public GitHub repo URL (HTTPS format recommended)")
 
@@ -109,7 +111,7 @@ if github_url:
 # Display the Generate README button only if there are readable files
 if st.session_state.readable_files:
     st.write("Step 2. Generate Your New README File")
-    if st.button("Generate README"):
+    if st.button("Generate README.md"):
         try:
             temp_dir = st.session_state.temp_dir
             readable_files = st.session_state.readable_files
@@ -140,8 +142,9 @@ if st.session_state.readable_files:
 
 # Display the Push to Repository section only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
-    st.write("Step 3. Copy or Push Your New README File to GitHub and Enjoy!")
+    st.write("Step 3. Copy, Download, Edit, or Push Your New README File to GitHub and Enjoy!")
     
+
     # Copy to Clipboard Button
 
     if st.button("Copy to clipboard"):
@@ -168,9 +171,18 @@ if st.session_state.readme_content and st.session_state.temp_dir:
         file_name="README.md",
         mime="text/markdown"
     )
+
+    if st.button("Edit README.md"):
+        st.write("Experimental feature. May not work as expected.")
+        edit_choice = st.selectbox("Edit README.md", options=["Auto Edit", "Manual Edit"])
+        if edit_choice == "Auto Edit":
+            st.write("Auto Edit feature not available yet.")
+        elif edit_choice == "Manual Edit":
+            st.write("Manual Edit feature not available yet.")
     
+
     # Provide the Push to Repository Button
-    st.write("Experimental feature. May not work as expected.")
+    
     if st.button("Push to Repository"):
         st.write("Experimental feature. May not work as expected.")
         try:
