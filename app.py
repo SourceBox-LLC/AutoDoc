@@ -6,6 +6,7 @@ import shutil
 import logging
 import re
 import json
+import pyperclip
 
 from docs_factory import generate_readme  # Import the generate_readme function
 from manual_edit import manual_edit_page  # Import the manual edit page
@@ -163,19 +164,11 @@ if st.session_state.readme_content and st.session_state.temp_dir:
     else:
         # Only display these buttons if NOT in edit mode.
         if st.button("Copy to clipboard"):
-            readme_json = json.dumps(st.session_state.readme_content)
-            copy_js = f"""
-            <script>
-            navigator.clipboard.writeText({readme_json})
-                .then(() => {{
-                    alert("README.md has been copied to the clipboard!");
-                }})
-                .catch(err => {{
-                    alert("Failed to copy README.md: " + err);
-                }});
-            </script>
-            """
-            st.markdown(copy_js, unsafe_allow_html=True)
+            readme = st.session_state.readme_content
+            pyperclip.copy(readme)
+            st.success("README.md has been copied to the clipboard!")
+
+
 
         st.download_button(
             label="Download README.md",
