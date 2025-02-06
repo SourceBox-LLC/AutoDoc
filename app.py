@@ -8,6 +8,8 @@ import re
 import json
 
 from docs_factory import generate_readme  # Import the generate_readme function
+from manual_edit import manual_edit_page  # Import the manual edit page
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +23,8 @@ if 'readable_files' not in st.session_state:
     st.session_state.readable_files = {}
 if 'readme_content' not in st.session_state:
     st.session_state.readme_content = None
+if 'edit_mode' not in st.session_state:
+    st.session_state.edit_mode = None
 
 with st.sidebar:
     st.title("Auto README Generator")
@@ -144,10 +148,9 @@ if st.session_state.readable_files:
 if st.session_state.readme_content and st.session_state.temp_dir:
     st.write("Step 3. Copy, Download, Edit, or Push Your New README File to GitHub and Enjoy!")
     
-
     # Copy to Clipboard Button
-
     if st.button("Copy to clipboard"):
+
         # JavaScript code to copy the README content to the clipboard
         readme_json = json.dumps(st.session_state.readme_content)
         copy_js = f"""
@@ -172,14 +175,18 @@ if st.session_state.readme_content and st.session_state.temp_dir:
         mime="text/markdown"
     )
 
+    # Button to open the Manual Edit page
     if st.button("Edit README.md"):
-        st.write("Experimental feature. May not work as expected.")
-        edit_choice = st.selectbox("Edit README.md", options=["Auto Edit", "Manual Edit"])
-        if edit_choice == "Auto Edit":
-            st.write("Auto Edit feature not available yet.")
-        elif edit_choice == "Manual Edit":
-            st.write("Manual Edit feature not available yet.")
+        # Flag to render manual edit page continuously until updated
+        st.session_state.edit_mode = "manual_edit"
     
+    # If edit_mode is activated, render the manual edit page
+    if st.session_state.get("edit_mode") == "manual_edit":
+        st.write("### Manual Editing Mode")
+        # Call the manual edit page with the current README content. Capture the updated content.
+        updated_content = manual_edit_page(st.session_state.readme_content)
+        # Save the updated content back to session state.
+        st.session_state.readme_content = updated_content
 
     # Provide the Push to Repository Button
     
@@ -249,6 +256,7 @@ if st.session_state.readme_content and st.session_state.temp_dir:
                     st.session_state.temp_dir = None
                     st.session_state.readable_files = {}
                     st.session_state.readme_content = None
+                    st.session_state.edit_mode = None
                 except PermissionError as pe:
                     st.warning(f"Could not delete temporary directory automatically: {pe}")
                     st.info(f"Please delete the temporary directory manually: `{temp_dir}`")
