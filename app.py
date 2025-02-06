@@ -30,10 +30,23 @@ if 'edit_mode' not in st.session_state:
 with st.sidebar:
     st.title("Auto README Generator")
     st.subheader("Easily generate a README.md file for your project.")
+    st.write(
+        "Are you tired of writing documentation? "
+        "Simply enter your public GitHub repository URL and let this tool clone your repo, analyze your files, "
+        "and generate a comprehensive README for you automatically."
+    )
     st.markdown("---")
-    st.write("Tired of documentation? Let me do it for you! I will pull your files from GitHub and generate documentation based on your projects.")
+    st.write("Step 1. Pull Your GitHub Project Repo")
+    st.write("Clone your repository into a temporary directory to process its contents.")
     st.markdown("---")
+    st.write("Step 2. Generate README.md")
+    st.write("Generate a detailed README file based on your repository's readable files.")
+    st.markdown("---")
+    st.write("Step 3. Manage Your Generated README.md")
+    st.write("Edit, copy, download, or push your new README to your repository.")
     
+    
+
 
 github_url = st.text_input("Enter your public GitHub repo URL (HTTPS format recommended)")
 
