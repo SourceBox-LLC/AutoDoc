@@ -128,6 +128,7 @@ if github_url:
 # Step 2: Generate README.md and Display It Permanently in This Section
 if st.session_state.readable_files:
     st.write("Step 2. Generate Your New README File")
+    st.text_input("AI instruction (optional) (coming soon)")
     if st.button("Generate README.md"):
         try:
             temp_dir = st.session_state.temp_dir
