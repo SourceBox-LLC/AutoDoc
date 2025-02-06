@@ -17,9 +17,10 @@ llm = ChatBedrock(
 )
 
 
-def generate_readme(readable_files, optional_prompt):
+def generate_readme(readable_files, optional_prompt=""):
     """
     Generates README content based on the dictionary of readable files and their contents using the Anthropic ChatBedrock model.
+
 
     Args:
         readable_files (dict of str: str): Dictionary mapping file paths to their content.
