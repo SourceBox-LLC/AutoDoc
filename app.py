@@ -113,7 +113,7 @@ if github_url:
                 st.error(f"An unexpected error occurred: {e}")
                 logger.exception("Unexpected Error during Cloning")
 
-# Display the Generate README button only if there are readable files
+# Step 2: Generate README.md and Display It Permanently in This Section
 if st.session_state.readable_files:
     st.write("Step 2. Generate Your New README File")
     if st.button("Generate README.md"):
@@ -134,16 +134,16 @@ if st.session_state.readable_files:
                     readme_file.write(readme_content)
 
                 st.success(f"README.md has been generated at `{readme_path}`.")
-
-                # Display the generated README
-                st.markdown("### Generated README.md")
-                st.markdown("---")
-                st.text_area("README.md Content", readme_content, height=600, disabled=True)
             else:
                 st.error("No readable files available to generate README.")
         except Exception as e:
             st.error(f"An error occurred while generating README: {e}")
             logger.exception("README Generation Failed")
+    
+    # Below the Generate button, always display the current README.md content if it exists in session.
+    if st.session_state.get("readme_content"):
+        st.markdown("### Current README.md")
+        st.text_area("Current README.md", st.session_state.readme_content, height=600, disabled=True)
 
 # Display the Push to Repository section only if README has been generated
 if st.session_state.readme_content and st.session_state.temp_dir:
