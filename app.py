@@ -44,9 +44,8 @@ with st.sidebar:
     st.markdown("---")
     st.write("Step 3. Manage Your Generated README.md")
     st.write("Edit, copy, download, or push your new README to your repository.")
+    st.markdown("---")
     
-    
-
 
 github_url = st.text_input("Enter your public GitHub repo URL (HTTPS format recommended)")
 
@@ -164,6 +163,7 @@ if st.session_state.readme_content and st.session_state.temp_dir:
 
     # Always show the Edit button. When pressed, the manual edit mode is enabled.
     if st.button("Edit README.md"):
+
         st.session_state.edit_mode = "manual_edit"
 
     if st.session_state.get("edit_mode") == "manual_edit":
@@ -174,9 +174,20 @@ if st.session_state.readme_content and st.session_state.temp_dir:
             st.session_state.readme_content = updated_content
             st.session_state.edit_mode = None
             st.rerun()
+
+        if st.button("View README.md"):
+            st.markdown("---")
+            st.button("Close View", key="1")
+            content = st.session_state.readme_content
+            st.markdown(content)
+            st.button("Close View", key="2")
+
+
+
     else:
         # Only display these buttons if NOT in edit mode.
         if st.button("Copy to clipboard"):
+
             readme = st.session_state.readme_content
             pyperclip.copy(readme)
             st.success("README.md has been copied to the clipboard!")
