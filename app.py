@@ -128,7 +128,9 @@ if github_url:
 # Step 2: Generate README.md and Display It Permanently in This Section
 if st.session_state.readable_files:
     st.write("Step 2. Generate Your New README File")
-    st.text_input("AI instruction (optional) (coming soon)")
+
+    optional_prompt = st.text_input("AI instruction (optional)")
+
     if st.button("Generate README.md"):
         try:
             temp_dir = st.session_state.temp_dir
@@ -136,7 +138,7 @@ if st.session_state.readable_files:
 
             if temp_dir and readable_files:
                 # Generate README content using the Anthropic model
-                readme_content = generate_readme(readable_files)
+                readme_content = generate_readme(readable_files, optional_prompt)
                 st.session_state.readme_content = readme_content
 
                 # Path for the README.md
