@@ -45,6 +45,8 @@ with st.sidebar:
     st.write("Step 3. Manage Your Generated README.md")
     st.write("Edit, copy, download, or push your new README to your repository.")
     st.markdown("---")
+
+st.image("autodock logo.webp", width=300)
     
 
 github_url = st.text_input("Enter your public GitHub repo URL (HTTPS format recommended)")
