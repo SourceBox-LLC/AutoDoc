@@ -1,0 +1,6 @@
+.env
+__pycache__/
+venv/
+feedback/
+repo/
+ai_test_output.txt
