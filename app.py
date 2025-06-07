@@ -9,7 +9,7 @@ import json
 import asyncio
 import argparse
 from ai import get_ai_response, SYSTEM, parse_args as ai_parse_args, count_tokens # Renamed to avoid conflict if app.py has its own parse_args
-from repo_tools import get_repo_file_tree, get_local_repo_contents  # Import functions from repo_tools.py
+from repo_tools import get_repo_file_tree, get_local_repo_contents, clone_github_repo  # Import functions from repo_tools.py
 
 # Set page configuration
 st.set_page_config(
@@ -441,7 +441,25 @@ if 'show_save_options' not in st.session_state:
 
 # Callback functions to update session state
 def on_pull_repo():
-    st.session_state.repo_pulled = True
+    # Get the repository URL from the text input's current value in session state
+    github_url = st.session_state.repo_url
+    
+    # Only proceed if URL is provided
+    if not github_url or github_url.strip() == "":
+        st.sidebar.error("Please enter a valid GitHub repository URL")
+        return
+    
+    try:
+        # Use the clone_github_repo function from repo_tools.py to actually clone the repository
+        with st.sidebar.status("Cloning repository...") as status:
+            clone_github_repo(github_url)
+            status.update(label="Repository cloned successfully!", state="complete", expanded=False)
+        
+        # After successful clone, update the session state
+        st.session_state.repo_pulled = True
+    except Exception as e:
+        st.sidebar.error(f"Error cloning repository: {e}")
+        st.session_state.repo_pulled = False
     
 def on_examine_repo():
     st.session_state.show_repo_contents = True
@@ -483,7 +501,12 @@ def on_save_documentation():
 
 # Add a sidebar
 st.sidebar.header("Step 1.) Pull Repository")
-repo_url = st.sidebar.text_input("Repository URL", "https://github.com/username/repository.git")
+# Store repo URL in session state so it can be accessed by the callback function
+if 'repo_url' not in st.session_state:
+    st.session_state.repo_url = "https://github.com/username/repository.git"
+
+# Use the widget without a default value to avoid the soft warning
+repo_url = st.sidebar.text_input("Repository URL", key="repo_url")
 
 # Pull Repository button with callback
 pull_repo = st.sidebar.button("Pull Repository", on_click=on_pull_repo)
