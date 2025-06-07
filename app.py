@@ -6,6 +6,10 @@ import os
 import subprocess
 import shutil
 import json
+import asyncio
+import argparse
+from ai import get_ai_response, SYSTEM, parse_args as ai_parse_args, count_tokens # Renamed to avoid conflict if app.py has its own parse_args
+from repo_tools import get_repo_file_tree, get_local_repo_contents  # Import functions from repo_tools.py
 
 # Set page configuration
 st.set_page_config(
@@ -14,6 +18,109 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize session state variables if they don't exist
+if 'sprint_model_params' not in st.session_state:
+    st.session_state.sprint_model_params = {
+        "model": "gpt-4o-mini",  # Using a faster model for Sprint mode
+        "temp": 0.5,             # Lower temperature for more focused output
+        "top_p": 0.85,           # Slightly more focused token selection
+        "max_tokens": 2048,      # Reasonable length for documentation
+        "pp": 0.0,               # Default presence penalty
+        "fp": 0.0,               # Default frequency penalty
+        "seed": None,            # No seed by default for variety
+        "stop": None             # No custom stop sequences
+    }
+
+if 'model_params' not in st.session_state: # For Lightning Draft, initialize if needed
+    st.session_state.model_params = st.session_state.sprint_model_params.copy() # Start with sprint defaults
+
+if 'advanced_prompt_content' not in st.session_state:
+    st.session_state.advanced_prompt_content = {}
+
+if 'sprint_prompt_content' not in st.session_state:
+    st.session_state.sprint_prompt_content = {}
+
+if 'documentation_content' not in st.session_state:
+    st.session_state.documentation_content = ""
+
+if 'documentation_generated' not in st.session_state:
+    st.session_state.documentation_generated = False
+
+if 'documentation_config' not in st.session_state:
+    st.session_state.documentation_config = {}
+
+if 'repo_contents' not in st.session_state:
+    st.session_state.repo_contents = {}
+
+if 'repo_pulled' not in st.session_state:
+    st.session_state.repo_pulled = False
+
+if 'show_examine_repo' not in st.session_state:
+    st.session_state.show_examine_repo = False
+
+if 'lightning_sprint_active' not in st.session_state:
+    st.session_state.lightning_sprint_active = False
+
+if 'lightning_draft_active' not in st.session_state:
+    st.session_state.lightning_draft_active = False
+
+if 'show_review' not in st.session_state:
+    st.session_state.show_review = False
+
+if 'show_save_options' not in st.session_state:
+    st.session_state.show_save_options = False
+
+# Helper function to create an argparse.Namespace from a dictionary of parameters
+def create_ai_args_namespace(params_dict):
+    # Get default args from ai.py's parser
+    default_args = ai_parse_args()
+    
+    # Override defaults with provided params
+    for key, value in params_dict.items():
+        if hasattr(default_args, key):
+            setattr(default_args, key, value)
+        # else: # Optional: handle unexpected params if necessary
+            # print(f"Warning: Parameter '{key}' not found in AI default args.")
+    return default_args
+
+# Helper function to format the advanced prompt for Lightning Draft
+def format_advanced_prompt(advanced_prompt_config):
+    prompt_parts = []
+    prompt_parts.append("Please generate comprehensive documentation for a software repository based on the following detailed requirements:")
+
+    # Content
+    content_config = advanced_prompt_config.get('content', {})
+    prompt_parts.append("\n[Content Requirements]")
+    prompt_parts.append(f"- Purpose of Documentation: {content_config.get('purpose', 'General understanding and usage')}")
+    prompt_parts.append(f"- Desired Level of Detail (1-5, 5 is most detailed): {content_config.get('detail_level', 3)}")
+    focus_areas = content_config.get('focus_areas', [])
+    if focus_areas:
+        prompt_parts.append(f"- Key Focus Areas: {', '.join(focus_areas)}")
+    if content_config.get('custom_instructions'):
+        prompt_parts.append(f"- Specific Custom Instructions: {content_config.get('custom_instructions')}")
+
+    # Structure
+    structure_config = advanced_prompt_config.get('structure', {})
+    prompt_parts.append("\n[Structure Requirements]")
+    prompt_parts.append(f"- Output Format: {structure_config.get('format', 'Markdown')}")
+    sections = structure_config.get('sections', {})
+    included_sections = [s_name for s_name, include in sections.items() if include]
+    if included_sections:
+        prompt_parts.append(f"- Mandatory Sections to Include: {', '.join(included_sections)}")
+    else:
+        prompt_parts.append("- Include standard documentation sections as appropriate.")
+
+    # Style
+    style_config = advanced_prompt_config.get('style', {})
+    prompt_parts.append("\n[Style Requirements]")
+    prompt_parts.append(f"- Writing Tone/Style: {style_config.get('tone', 'Clear, concise, and professional')}")
+    prompt_parts.append(f"- Target Audience: {style_config.get('audience', 'Developers with intermediate experience')}")
+    prompt_parts.append(f"- Preference for Code Examples: {style_config.get('code_examples', 'Include moderately detailed examples where relevant')}")
+
+    prompt_parts.append("\nAdditionally, consider the overall structure of the repository to provide a coherent and useful document. The output must be valid Markdown.")
+    return "\n".join(prompt_parts)
+
 
 # Custom CSS for styling
 st.markdown('''
@@ -339,6 +446,11 @@ def on_pull_repo():
 def on_examine_repo():
     st.session_state.show_repo_contents = True
     st.session_state.show_step3 = True
+    
+    # Store repo contents in session state
+    repo_path = "repo"
+    if os.path.exists(repo_path) and os.path.isdir(repo_path):
+        st.session_state.repo_contents = get_local_repo_contents(repo_path)
     
 def on_lightning_sprint():
     st.session_state.lightning_sprint_active = True
@@ -886,11 +998,11 @@ elif st.session_state.lightning_draft_active:
             # Update model parameters in session state based on UI inputs
             st.session_state.model_params = {
                 "model": model,
-                "temperature": temperature,
+                "temp": temperature, 
                 "top_p": top_p,
                 "max_tokens": max_tokens,
-                "presence_penalty": presence_penalty,
-                "frequency_penalty": frequency_penalty,
+                "pp": presence_penalty, 
+                "fp": frequency_penalty, 
                 "seed": seed if use_seed else None,
                 "stop": [seq.strip() for seq in stop_sequences.split('\n') if seq.strip()] if stop_sequences else None
             }
@@ -921,90 +1033,43 @@ elif st.session_state.lightning_draft_active:
                     "code_examples": code_example_amount
                 }
             }
-            # Use status container to show progress
-            with st.status("Generating detailed documentation...", expanded=True) as status:
-                st.write("Analyzing repository structure...")
-                time.sleep(1.5)  # Simulate processing
-                
-                st.write("Extracting code patterns and relationships...")
-                time.sleep(2)  # Simulate processing
-                
-                st.write("Identifying key components and dependencies...")
-                time.sleep(2)  # Simulate processing
-                
-                st.write("Applying documentation templates based on selected options...")
-                time.sleep(2.5)  # Simulate processing
-                
-                st.write("Generating code examples...")
-                time.sleep(2)  # Simulate processing
-                
-                st.write("Formatting output according to style preferences...")
-                time.sleep(1.5)  # Simulate processing
-                
-                # Update status when complete
-                status.update(label="Advanced documentation generated successfully!", state="complete", expanded=True)
             
-            # Display configuration summary
-            st.subheader("Configuration Summary")
+            formatted_user_prompt = format_advanced_prompt(st.session_state.advanced_prompt_content)
+            ai_args = create_ai_args_namespace(st.session_state.model_params)
             
-            # Display two separate tabs for different configuration types
-            config_tab1, config_tab2 = st.tabs(["Advanced Prompt Content", "Model Parameters"])
-            
-            with config_tab1:
-                st.write("This content will be used to create the main inference prompt:")
-                st.json(st.session_state.advanced_prompt_content)
-                
-            with config_tab2:
-                st.write("These parameters will be used to tune the model behavior:")
-                st.json(st.session_state.model_params)
-            
-            # Sample documentation content based on the configuration
-            draft_documentation = """
-# Repository Documentation
+            generated_documentation = "Error: AI did not return content."
+            try:
+                with st.spinner(" Lightning Draft is thinking..."):
+                    # Make the actual AI call
+                    generated_documentation = asyncio.run(get_ai_response(formatted_user_prompt, SYSTEM, ai_args))
+                st.success("Advanced documentation generated successfully!")
+            except Exception as e:
+                st.error(f"Error during AI documentation generation: {e}")
+                generated_documentation = f"Error generating documentation: {e}"
 
-## Table of Contents
-* [Overview](#overview)
-* [Installation](#installation)
-* [Usage](#usage)
-* [API Reference](#api-reference)
-* [Examples](#examples)
-
-## Overview
-This repository contains a robust application with various components organized in a modular architecture.
-
-## Installation
-```bash
-git clone https://github.com/example/repo.git
-cd repo
-pip install -r requirements.txt
-```
-
-## Usage
-Basic usage examples with code snippets...
-
-## API Reference
-Detailed API documentation with parameters, return values, and examples...
-
-## Examples
-More elaborate examples demonstrating different use cases...
-            """
-            
             # Save documentation and configuration to session state
-            st.session_state.documentation_content = draft_documentation
+            st.session_state.documentation_content = generated_documentation
             st.session_state.documentation_generated = True
-            
-            # Store both advanced_prompt_content and model_params in documentation_config
             st.session_state.documentation_config = {
                 "prompt_content": st.session_state.advanced_prompt_content,
                 "model_params": st.session_state.model_params
             }
             
-            # Mock documentation preview
+            # Display configuration summary
+            st.subheader("Configuration Summary")
+            config_tab1, config_tab2 = st.tabs(["Advanced Prompt Content", "Model Parameters"])
+            with config_tab1:
+                st.write("These settings defined the content, structure, and style of your documentation:")
+                st.json(st.session_state.advanced_prompt_content)
+            with config_tab2:
+                st.write("These parameters were used to tune the model behavior:")
+                st.json(st.session_state.model_params)
+
+            # Documentation preview
             st.subheader("Documentation Preview")
-            st.markdown(draft_documentation)
+            st.markdown(generated_documentation)
             
             # Show Step 4 button for reviewing documentation
-            st.success("Advanced documentation generated successfully! You can now proceed to Step 4 to review your documentation.")
             if st.button("Go to Documentation Review"):
                 on_review_documentation()
 
@@ -1012,7 +1077,7 @@ elif st.session_state.lightning_sprint_active:
     # Display text input for Lightning Sprint mode
     with repo_container:
         # Use markdown with HTML for centered headers
-        st.markdown("<h1 style='text-align: center; color: grey;'>⚡ Lightning Sprint</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: grey;'> Lightning Sprint</h1>", unsafe_allow_html=True)
         st.markdown("<h3 style='text-align: center;'>Quick Documentation Generation</h3>", unsafe_allow_html=True)
         st.divider()
 
@@ -1027,75 +1092,75 @@ elif st.session_state.lightning_sprint_active:
             help="Be specific about what kind of documentation you want")
         
         # Submit button and options
-        generate_pressed = st.button("Generate", type="primary")
+        generate_pressed = st.button("Generate Quick Documentation", type="primary")
         
         # Handle generate button press
         if generate_pressed:
-            # Store default model parameters for Lightning Sprint
-            # These are optimized for quick, high-quality documentation generation
-            st.session_state.sprint_model_params = {
-                "model": "gpt-4o-mini",  # Using a faster model for Sprint mode
-                "temperature": 0.5,      # Lower temperature for more focused output
-                "top_p": 0.85,           # Slightly more focused token selection
-                "max_tokens": 2048,      # Reasonable length for documentation
-                "presence_penalty": 0.0,
-                "frequency_penalty": 0.0,
-                "seed": None,            # No seed by default for variety
-                "stop": None             # No custom stop sequences
-            }
+            # Store the prompt content for sprint mode
+            st.session_state.sprint_prompt_content = {"prompt": user_prompt}
             
-            # Store the sprint prompt content
-            st.session_state.sprint_prompt_content = {
-                "user_prompt": user_prompt,
-                "default_instruction": "Generate clear, concise documentation that covers the repository's structure, purpose, and main components."
-            }
+            ai_args = create_ai_args_namespace(st.session_state.sprint_model_params)
             
-            # Use status container to show progress
-            with st.status("Generating documentation...", expanded=True) as status:
-                st.write("Analyzing repository structure...")
-                time.sleep(1.5)  # Simulate processing
-                
-                st.write("Identifying key components...")
-                time.sleep(2)  # Simulate processing
-                
-                st.write("Generating documentation based on codebase...")
-                time.sleep(2.5)  # Simulate processing
-                
-                st.write("Finalizing formatting...")
-                time.sleep(1)  # Simulate processing
-                
-                # Update status when complete
-                status.update(label="Documentation generation complete!", state="complete", expanded=True)
-            
-            # Sample documentation content
-            sprint_documentation = """
-## Project Overview
-This is a sample repository with various components. The documentation provides an overview of the structure and key functionality.
+            generated_documentation = "Error: AI did not return content."
+            try:
+                with st.spinner(" Lightning Sprint is thinking..."):
+                    # Prepare context with repository contents
+                    if st.session_state.repo_contents:
+                        # Create a context with repository structure and content
+                        repo_context = f"\n\n### Repository Contents:\n"
+                        
+                        # Add file tree for structure overview
+                        repo_path = "repo"
+                        if os.path.exists(repo_path) and os.path.isdir(repo_path):
+                            repo_tree = get_repo_file_tree(repo_path)
+                            repo_context += f"\n\n### Repository Structure:\n```\n{repo_tree}\n```\n\n"
+                        
+                        # Count tokens in repo contents
+                        all_content = json.dumps(st.session_state.repo_contents)
+                        token_count = count_tokens(all_content)
+                        
+                        # If token count is manageable, include all file contents
+                        # Otherwise, just include the structure and file names
+                        MAX_TOKENS = 50000  # Set a reasonable limit
+                        
+                        if token_count < MAX_TOKENS:
+                            repo_context += "\n\n### File Contents:\n"
+                            for file_path, content in st.session_state.repo_contents.items():
+                                repo_context += f"\n\n#### {file_path}\n```\n{content}\n```\n"
+                        else:
+                            # Just include file names if content is too large
+                            st.warning(f"Repository content is too large ({token_count} tokens). Sending only structure information to the AI.")
+                            repo_context += "\n\n### Files in repository:\n"
+                            for file_path in st.session_state.repo_contents.keys():
+                                repo_context += f"- {file_path}\n"
+                        
+                        # Combine user prompt with repository context
+                        full_prompt = f"{user_prompt}\n\n{repo_context}"
+                    else:
+                        full_prompt = user_prompt
+                        st.warning("No repository contents available. Documentation may be limited.")
+                    
+                    # Make the actual AI call with repository context
+                    generated_documentation = asyncio.run(get_ai_response(full_prompt, SYSTEM, ai_args))
+                st.success("Quick documentation generated successfully!")
+            except Exception as e:
+                st.error(f"Error during AI documentation generation: {e}")
+                generated_documentation = f"Error generating documentation: {e}"
 
-## Key Components
-- **Component A**: Handles data processing and validation
-- **Component B**: Manages user interface elements
-- **Component C**: Implements business logic
-
-## Getting Started
-Instructions for setting up and running the project...
-
-## API Reference
-Details of the available APIs and their usage...
-            """
-            
-            # Save documentation to session state
-            st.session_state.documentation_content = sprint_documentation
+            # Save documentation and configuration to session state
+            st.session_state.documentation_content = generated_documentation
             st.session_state.documentation_generated = True
+            st.session_state.documentation_config = {
+                "prompt_content": st.session_state.sprint_prompt_content,
+                "model_params": st.session_state.sprint_model_params
+            }
             
             # Display configuration summary
-            with st.expander("View Configuration Summary", expanded=False):
-                config_tab1, config_tab2 = st.tabs(["Sprint Prompt", "Model Parameters"])
-                
+            with st.expander("View Configuration Summary"):
+                config_tab1, config_tab2 = st.tabs(["Prompt Content", "Model Parameters"])
                 with config_tab1:
-                    st.write("This content was used to create the inference prompt:")
+                    st.write("This prompt was used for generation:")
                     st.json(st.session_state.sprint_prompt_content)
-                    
                 with config_tab2:
                     st.write("These parameters were used to tune the model behavior:")
                     st.json(st.session_state.sprint_model_params)
@@ -1103,11 +1168,9 @@ Details of the available APIs and their usage...
             # Display generated documentation
             st.markdown("<h1 style='text-align: center; color: grey;'>Generated Documentation</h1>", unsafe_allow_html=True)
             st.divider()
-
-            st.markdown(sprint_documentation)
+            st.markdown(generated_documentation)
             
             # Show Step 4 button for reviewing documentation
-            st.success("Documentation generated successfully! You can now proceed to Step 4 to review your documentation.")
             if st.button("Go to Documentation Review"):
                 on_review_documentation()
 
@@ -1119,38 +1182,56 @@ elif st.session_state.show_repo_contents:
             # Use markdown with HTML for centered and grey header
             st.markdown("<h1 style='text-align: center; color: grey;'>Repository Contents</h1>", unsafe_allow_html=True)
             
+            # Display token count information for the repository contents
+            if st.session_state.repo_contents:
+                num_files = len(st.session_state.repo_contents)
+                all_content = json.dumps(st.session_state.repo_contents)
+                token_count = count_tokens(all_content)
+                
+                st.info(f"Repository contains {num_files} files with approximately {token_count:,} tokens.")
+            
             # Get statistics about the repository
             file_count = sum([len(files) for _, _, files in os.walk(repo_path)])
             dir_count = sum([len(dirs) for _, dirs, _ in os.walk(repo_path)])
             
             st.info(f"Repository contains {file_count} files in {dir_count} directories.")
             
-            # Create expandable sections for different views of the repository
-            with st.expander("📁 File Explorer", expanded=True):
+            # Create tabs for different views of the repository
+            file_tab, tree_tab, contents_tab = st.tabs(["📁 File Explorer", "🌳 Tree View", "📚 Content Stats"])
+            
+            with file_tab:
                 st.write("Viewing files in the 'repo' folder:")
-                # Display the directory structure
+                # Display the directory structure using the original function
                 display_directory_contents(repo_path)
                 
-            # You could add additional expandable sections here if needed
-            # For example, a section for code statistics, important files, etc.
-            # with st.expander("📊 Code Statistics", expanded=False):
-            #     st.write("Repository statistics will go here...")
+            with tree_tab:
+                st.write("Repository folder structure tree:")
+                # Display the formatted tree view using our new function
+                repo_tree = get_repo_file_tree(repo_path)
+                st.code(repo_tree)
+                
+            with contents_tab:
+                st.write("Repository file contents:")
+                if st.session_state.repo_contents:
+                    st.json(st.session_state.repo_contents)
+                else:
+                    st.info("No repository contents available.")
         else:
             st.warning("No repository found. Please pull a repository first using Step 1.")
 else:
     # Show welcome screen with lightning animation when no option is active
     with repo_container:
         st.markdown('''
-        <div class="welcome-container">
-            <div style="display: flex; justify-content: center;">
-                <div class="lightning-bolt">⚡</div>
-                <div class="lightning-bolt">⚡</div>
-                <div class="lightning-bolt">⚡</div>
-            </div>
-            <h2>Welcome to Lightning MD</h2>
-            <div class="welcome-text">
-                <p>Generate beautiful documentation from your GitHub repositories with lightning speed!</p>
-                <p>Get started by entering a GitHub repository URL and clicking "Pull Repository" in the sidebar.</p>
-            </div>
-        </div>
+<div class="welcome-container">
+    <div style="display: flex; justify-content: center;">
+        <div class="lightning-bolt">⚡</div>
+        <div class="lightning-bolt">⚡</div>
+        <div class="lightning-bolt">⚡</div>
+    </div>
+    <h2>Welcome to Lightning MD</h2>
+    <div class="welcome-text">
+        <p>Generate beautiful documentation from your GitHub repositories with lightning speed!</p>
+        <p>Get started by entering a GitHub repository URL and clicking "Pull Repository" in the sidebar.</p>
+    </div>
+</div>
         ''', unsafe_allow_html=True)

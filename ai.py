@@ -2,8 +2,16 @@
 import os, asyncio, argparse, json
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+import tiktoken
 
 load_dotenv()
+
+
+def count_tokens(text: str, model: str = "gpt-4o-mini") -> int:
+    """Return the number of tokens a plain string will use for the given model."""
+    enc = tiktoken.encoding_for_model(model)
+    return len(enc.encode(text))
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="Tiny configurable ChatGPT agent")
@@ -37,7 +45,8 @@ RULES TO FOLLOW:
 9. Avoid making assumptions about implementation details not clearly visible in the code
 10. Follow the structure, content, and style parameters specified in the user's request
 
-Your output should be valid Markdown that renders properly in standard Markdown viewers.
+YOUR OUTPUT SHOULD BE VALID MARKDOWN THAT RENDERS PROPERLY IN STANDARD MARKDOWN VIEWERS.
+YOUR RESPONSE IS THE DIRECT MARKDOWN CONTENT DISPLAYED IN THE MARKDOWN VIEWER.
 """
 
 async def get_ai_response(user_prompt_content: str, system_prompt_content: str, args_namespace: argparse.Namespace):
@@ -46,6 +55,15 @@ async def get_ai_response(user_prompt_content: str, system_prompt_content: str, 
         {"role": "system", "content": system_prompt_content},
         {"role": "user", "content": user_prompt_content}
     ]
+
+    # Count tokens
+    #token_count = count_tokens(user_prompt_content + system_prompt_content)
+    #print(f"Token count: {token_count}")
+
+    #if token_count > args_namespace.max_tokens:
+    #    print(f"Warning: Token count exceeds max_tokens ({token_count} > {args_namespace.max_tokens})")
+    #    return "Token count exceeds max_tokens"
+
 
     try:
         completion = await client.chat.completions.create(
@@ -63,7 +81,7 @@ async def get_ai_response(user_prompt_content: str, system_prompt_content: str, 
         return completion.choices[0].message.content
     except Exception as e:
         print(f"Error in get_ai_response: {e}")
-        return None
+        return "Error in get_ai_response"
 
 async def chat():
     msgs = [{"role": "system", "content": SYSTEM}]
