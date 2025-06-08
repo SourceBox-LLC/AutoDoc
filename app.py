@@ -382,6 +382,84 @@ for step in steps:
         </div>
         """, unsafe_allow_html=True)
 
+
+# Determine the current active step
+def get_current_step():
+    if not st.session_state.repo_pulled:
+        return 1  # Step 1: Pull Repository
+    elif not st.session_state.show_step3:
+        return 2  # Step 2: Examine Repository
+    elif not st.session_state.documentation_generated:
+        return 3  # Step 3: Generate Documentation
+    elif not (st.session_state.show_review or st.session_state.show_save_options):
+        return 3  # Still in Step 3
+    elif not st.session_state.show_save_options:
+        return 4  # Step 4: Review Documentation
+    else:
+        return 5  # Step 5: Save Documentation
+
+current_step = get_current_step()
+
+# Only show reversion options if we're past step 1
+if current_step > 1:
+    st.sidebar.markdown("### Revert to Previous Step")
+    
+    # Create options for steps the user can go back to
+    step_options = []
+    step_labels = ["1: Pull Repository", "2: Examine Repository", "3: Generate Documentation", "4: Review Documentation"]
+    
+    # Only include steps that are before the current step
+    for i in range(current_step - 1):
+        step_options.append(step_labels[i])
+    
+    if step_options:
+        revert_option = st.sidebar.selectbox(
+            "Select a step to revert to:",
+            options=step_options
+        )
+        
+        if st.sidebar.button("Revert to Selected Step"):
+            # Extract the step number from the selected option
+            selected_step = int(revert_option.split(":")[0])
+            
+            # Reset state based on the selected step
+            if selected_step <= 1:
+                # Reset to Step 1 (Pull Repository)
+                st.session_state.repo_pulled = False
+                st.session_state.show_step3 = False
+                st.session_state.documentation_generated = False
+                st.session_state.documentation_content = ""
+                st.session_state.show_review = False
+                st.session_state.show_save_options = False
+                st.session_state.lightning_sprint_active = False
+                st.session_state.lightning_draft_active = False
+                if 'repo_contents' in st.session_state:
+                    del st.session_state.repo_contents
+                
+            elif selected_step <= 2:
+                # Reset to Step 2 (Examine Repository)
+                st.session_state.show_step3 = False
+                st.session_state.documentation_generated = False
+                st.session_state.documentation_content = ""
+                st.session_state.show_review = False
+                st.session_state.show_save_options = False
+                st.session_state.lightning_sprint_active = False
+                st.session_state.lightning_draft_active = False
+                
+            elif selected_step <= 3:
+                # Reset to Step 3 (Generate Documentation)
+                st.session_state.documentation_generated = False
+                st.session_state.documentation_content = ""
+                st.session_state.show_review = False
+                st.session_state.show_save_options = False
+                st.session_state.lightning_sprint_active = False
+                st.session_state.lightning_draft_active = False
+            
+            # Force UI refresh
+            st.rerun()
+
+
+
 st.sidebar.markdown("<hr style='margin: 15px 0 20px 0;'>", unsafe_allow_html=True)
 
 # Add this to your CSS
@@ -452,13 +530,26 @@ def on_pull_repo():
     try:
         # Use the clone_github_repo function from repo_tools.py to actually clone the repository
         with st.sidebar.status("Cloning repository...") as status:
+            # Check if repository directory exists
+            repo_dir = "repo"
+            if os.path.exists(repo_dir):
+                status.update(label=f"Preparing to replace existing repository...")
+                # Handling is done inside clone_github_repo function, just informing the user
+            
+            # Clone the repository
+            status.update(label=f"Cloning {github_url}...")
             clone_github_repo(github_url)
             status.update(label="Repository cloned successfully!", state="complete", expanded=False)
         
         # After successful clone, update the session state
         st.session_state.repo_pulled = True
+        
+        # Reset any session state related to repository content
+        if 'repo_contents' in st.session_state:
+            del st.session_state.repo_contents
+            
     except Exception as e:
-        st.sidebar.error(f"Error cloning repository: {e}")
+        st.sidebar.error(f"Error cloning repository: {str(e)}")
         st.session_state.repo_pulled = False
     
 def on_examine_repo():
@@ -499,17 +590,30 @@ def on_save_documentation():
     st.session_state.lightning_sprint_active = False
     st.session_state.show_repo_contents = False
 
+# Check if documentation has been generated
+docs_generated = st.session_state.get('documentation_generated', False)
+
 # Add a sidebar
-st.sidebar.header("Step 1.) Pull Repository")
+# Use different styling for headers based on whether documentation is generated
+if docs_generated:
+    st.sidebar.markdown("<h3 style='color: #AAAAAA;'>Step 1.) Pull Repository</h3>", unsafe_allow_html=True)
+else:
+    st.sidebar.header("Step 1.) Pull Repository")
+
 # Store repo URL in session state so it can be accessed by the callback function
 if 'repo_url' not in st.session_state:
     st.session_state.repo_url = "https://github.com/username/repository.git"
 
-# Use the widget without a default value to avoid the soft warning
-repo_url = st.sidebar.text_input("Repository URL", key="repo_url")
-
-# Pull Repository button with callback
-pull_repo = st.sidebar.button("Pull Repository", on_click=on_pull_repo)
+# Disable Step 1 if documentation has been generated
+if docs_generated:
+    st.sidebar.text_input("Repository URL", key="repo_url", value=st.session_state.repo_url, disabled=True)
+    st.sidebar.button("Pull Repository", disabled=True)
+else:
+    # Use the widget without a default value to avoid the soft warning
+    repo_url = st.sidebar.text_input("Repository URL", key="repo_url")
+    
+    # Pull Repository button with callback
+    pull_repo = st.sidebar.button("Pull Repository", on_click=on_pull_repo)
 
 # Show status message if repo was pulled
 if st.session_state.repo_pulled:
@@ -517,15 +621,39 @@ if st.session_state.repo_pulled:
     
     # Step 2 options appear after repo is pulled
     st.sidebar.divider()
-    st.sidebar.header("Step 2.) Examine Repository")
-    examine_repo = st.sidebar.button("Examine Repository", on_click=on_examine_repo)
+    
+    # Use different styling for headers based on whether documentation is generated
+    if docs_generated:
+        st.sidebar.markdown("<h3 style='color: #AAAAAA;'>Step 2.) Examine Repository</h3>", unsafe_allow_html=True)
+    else:
+        st.sidebar.header("Step 2.) Examine Repository")
+    
+    # Disable Step 2 if documentation has been generated
+    if docs_generated:
+        st.sidebar.button("Examine Repository", disabled=True)
+    else:
+        examine_repo = st.sidebar.button("Examine Repository", on_click=on_examine_repo)
     
     # Step 3 appears after repository is examined
     if st.session_state.show_step3:
         st.sidebar.divider()
-        st.sidebar.header("Step 3.) Generate Documentation")
-        st.sidebar.button("Lightning Sprint", on_click=on_lightning_sprint)
-        st.sidebar.button("Lightning Draft", on_click=on_lightning_draft)
+        
+        # Check if user is in Step 4 (reviewing or saving) to determine if Step 3 should be locked
+        in_step4 = st.session_state.get('show_review', False) or st.session_state.get('show_save_options', False)
+        
+        # Gray out Step 3 header if in Step 4
+        if in_step4:
+            st.sidebar.markdown("<h3 style='color: #AAAAAA;'>Step 3.) Generate Documentation</h3>", unsafe_allow_html=True)
+        else:
+            st.sidebar.header("Step 3.) Generate Documentation")
+            
+        # Disable Step 3 buttons if in Step 4
+        if in_step4:
+            st.sidebar.button("Lightning Sprint", disabled=True)
+            st.sidebar.button("Lightning Draft", disabled=True)
+        else:
+            st.sidebar.button("Lightning Sprint", on_click=on_lightning_sprint)
+            st.sidebar.button("Lightning Draft", on_click=on_lightning_draft)
         
         # Step 4 appears after documentation is generated
         if st.session_state.documentation_generated:
@@ -1078,6 +1206,9 @@ elif st.session_state.lightning_draft_active:
                 "model_params": st.session_state.model_params
             }
             
+            # Force a rerun to update the sidebar UI
+            st.rerun()
+            
             # Display configuration summary
             st.subheader("Configuration Summary")
             config_tab1, config_tab2 = st.tabs(["Advanced Prompt Content", "Model Parameters"])
@@ -1177,6 +1308,9 @@ elif st.session_state.lightning_sprint_active:
                 "prompt_content": st.session_state.sprint_prompt_content,
                 "model_params": st.session_state.sprint_model_params
             }
+            
+            # Force a rerun to update the sidebar UI
+            st.rerun()
             
             # Display configuration summary
             with st.expander("View Configuration Summary"):

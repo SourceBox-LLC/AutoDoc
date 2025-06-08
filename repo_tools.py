@@ -15,26 +15,64 @@ def clone_github_repo(github_url):
     
     Args:
         github_url (str): URL of the GitHub repository to clone
+        
+    Raises:
+        subprocess.CalledProcessError: If git clone command fails
+        Exception: For other unexpected errors
+        
+    Returns:
+        bool: True if repository was cloned successfully
     """
-    # Ensure the repo folder is empty or doesn't exist
+    # Get the target directory name
     repo_dir = "repo"
     
+    # Handle existing repository by renaming instead of deleting
     if os.path.exists(repo_dir):
-        print(f"Removing existing '{repo_dir}' directory...")
-        shutil.rmtree(repo_dir)
+        print(f"Handling existing '{repo_dir}' directory...")
+        try:
+            # Rename the existing repo to a backup name temporarily
+            temp_dir = f"{repo_dir}_old"
+            
+            # Remove any previous backup if it exists
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                
+            # Rename the current repo to backup
+            os.rename(repo_dir, temp_dir)
+            
+            # Try to remove the backup directory
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"Removed old repository directory")
+            except:
+                # If we can't remove it, that's fine, we've already renamed it
+                print(f"Note: Could not remove old repository backup, but continuing with clone")
+        except Exception as e:
+            print(f"Warning handling existing repository: {e}")
+            # Continue even if we couldn't handle the old repo
+    
+    # Create a new empty repo directory
+    try:
+        os.makedirs(repo_dir, exist_ok=True)
+    except Exception as e:
+        error_msg = f"Could not create repository directory: {str(e)}"
+        print(f"Error: {error_msg}")
+        raise Exception(error_msg)
     
     try:
         # Clone the repository
         print(f"Cloning {github_url} into '{repo_dir}'...")
         subprocess.run(["git", "clone", github_url, repo_dir], check=True)
         print("Repository cloned successfully!")
+        return True
     except subprocess.CalledProcessError as e:
-        print(f"Error: Failed to clone repository. Make sure the URL is correct and you have git installed.")
-        print(f"Command returned: {e}")
-        sys.exit(1)
+        error_msg = f"Failed to clone repository. Make sure the URL is correct and you have git installed. Command returned: {e}"
+        print(f"Error: {error_msg}")
+        raise subprocess.CalledProcessError(e.returncode, e.cmd, e.output, e.stderr, error_msg)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        sys.exit(1)
+        error_msg = f"An unexpected error occurred during cloning: {str(e)}"
+        print(f"Error: {error_msg}")
+        raise Exception(error_msg)
 
 def main(github_url=None):
     """Main function that can be called by other modules or run directly"""
@@ -43,8 +81,12 @@ def main(github_url=None):
         print("Example: python pull_repo.py https://github.com/username/repository.git")
         return False
     
-    clone_github_repo(github_url)
-    return True
+    try:
+        success = clone_github_repo(github_url)
+        return success
+    except Exception as e:
+        print(f"Error in main function: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     # If script is run directly, prompt user for GitHub URL
