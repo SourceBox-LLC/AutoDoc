@@ -1,10 +1,8 @@
 # chat_agent.py
 import os, asyncio, argparse, json
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
 import tiktoken
-
-load_dotenv()
+import streamlit as st
 
 
 def count_tokens(text: str, model: str = "gpt-4o-mini") -> int:
@@ -27,7 +25,18 @@ def parse_args():
     return p.parse_args()
 
 ARGS = parse_args()
-client = AsyncOpenAI()  # needs OPENAI_API_KEY in env
+
+# Initialize OpenAI client with API key from Streamlit secrets
+try:
+    client = AsyncOpenAI(api_key=st.secrets["openai"]["api_key"])
+except Exception as e:
+    # Fall back to environment variable if not running in Streamlit or secrets not configured
+    import os
+    client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("Warning: No OpenAI API key found in Streamlit secrets or environment variables.")
+        print("         Please set up the API key in .streamlit/secrets.toml for deployment.")
+        print(f"Error details: {e}")
 
 # Comprehensive system prompt for documentation generation
 SYSTEM = """
