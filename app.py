@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import time
 import os
+from docs_generation import generate_documentation
 import subprocess
 import shutil
 import json
@@ -697,86 +698,109 @@ if st.session_state.show_save_options:
         st.divider()
         
         if st.session_state.documentation_generated and st.session_state.documentation_content:
-            # Create a container for file format options
-            st.write("### 1. Select Format")
-            format_options = st.radio(
-                "File Format",
-                ["Markdown (.md)", "HTML (.html)", "PDF (.pdf)", "Word Document (.docx)"],
-                horizontal=True
-            )
+            # Simplified format - Markdown only
+            st.write("### 1. File Format")
+            st.info("Documentation is exported in Markdown (.md) format")
             
-            # Create a container for export options
+            # Check if docs directory exists
+            has_docs_dir = os.path.exists("docs") and os.path.isdir("docs")
+            
+            # Single consolidated section for export options
             st.write("### 2. Export Options")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Quick Actions**")
-                
-                # Direct download button
-                st.download_button(
-                    label="Download Documentation",
-                    data=st.session_state.documentation_content,
-                    file_name="documentation.md",
-                    mime="text/markdown",
-                    help="Download documentation in the selected format directly to your computer"
+            # File name customization - moved from advanced options
+            custom_filename = st.text_input(
+                "Filename", 
+                "documentation", 
+                help="Enter a custom filename (without extension)"
+            )
+            
+            # Metadata is always included (no longer optional)
+            
+            if has_docs_dir:
+                # Option to include docs directory
+                include_docs_dir = st.checkbox(
+                    "Include 'docs' directory", 
+                    value=True,
+                    help="Include additional documentation files from the 'docs' directory"
                 )
                 
-                # Copy to clipboard button
-                if st.button("Copy to Clipboard", help="Copy the entire documentation to your clipboard"):
-                    st.success("Documentation copied to clipboard! (This would work in the complete app)")
+                # Show info about what's being included
+                if include_docs_dir:
+                    st.info("📁 Will include all documentation files from the 'docs' directory")
+                
+                # Direct download button - use different label based on docs dir inclusion
+                if include_docs_dir:
+                    # Need to create a zip file with all content
+                    import io
+                    import zipfile
                     
-                # Save to GitHub Gist
-                if st.button("Save as GitHub Gist", help="Create a GitHub Gist from your documentation"):
-                    st.info("This would create a GitHub Gist in the complete app")
-                    # This would require GitHub API integration in a complete app
-            
-            with col2:
-                st.write("**Advanced Options**")
+                    # Create in-memory zip file
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+                        # Add main documentation with custom filename
+                        main_filename = f"{custom_filename}.md"
+                        
+                        # Always include metadata (no longer optional)
+                        content = st.session_state.documentation_content
+                        
+                        # Write main file to zip
+                        zip_file.writestr(main_filename, content)
+                        
+                        # Add all files from docs directory
+                        for root, dirs, files in os.walk("docs"):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                # Get relative path from docs directory
+                                rel_path = os.path.relpath(file_path, "docs")
+                                # Add file to zip with path inside docs directory
+                                with open(file_path, 'rb') as f:
+                                    zip_file.writestr(os.path.join("docs", rel_path), f.read())
+                    
+                    # Reset buffer position
+                    zip_buffer.seek(0)
+                    
+                    # Custom zip filename
+                    zip_filename = f"{custom_filename}_complete.zip"
+                    
+                    # Download button for zip file
+                    st.download_button(
+                        label="Download Complete Documentation Package",
+                        data=zip_buffer,
+                        file_name=zip_filename,
+                        mime="application/zip",
+                        help="Download main documentation and all docs directory files as a zip package"
+                    )
+                else:
+                    # Just the main documentation file
+                    main_filename = f"{custom_filename}.md"
+                    
+                    # Always include metadata (no longer optional)
+                    content = st.session_state.documentation_content
+                    
+                    st.download_button(
+                        label=f"Download {main_filename}",
+                        data=content,
+                        file_name=main_filename,
+                        mime="text/markdown",
+                        help="Download only the main documentation file"
+                    )
+            else:
+                # Direct download button if no docs directory exists
+                main_filename = f"{custom_filename}.md"
                 
-                # File name customization
-                custom_filename = st.text_input(
-                    "Filename", 
-                    "documentation", 
-                    help="Enter a custom filename (without extension)"
+                # Always include metadata (no longer optional)
+                content = st.session_state.documentation_content
+                
+                st.download_button(
+                    label=f"Download {main_filename}",
+                    data=content,
+                    file_name=main_filename,
+                    mime="text/markdown",
+                    help="Download documentation in the selected format"
                 )
                 
-                # Include metadata checkbox
-                include_metadata = st.checkbox(
-                    "Include Generation Metadata", 
-                    value=True,
-                    help="Add metadata such as generation date and repository info"
-                )
-                
-                # Include table of contents
-                include_toc = st.checkbox(
-                    "Include Table of Contents", 
-                    value=True,
-                    help="Automatically generate a table of contents"
-                )
-                
-                # Export with settings button
-                if st.button("Export with Settings"):
-                    # This would apply the selected options in a complete app
-                    filename = f"{custom_filename}.md" if format_options == "Markdown (.md)" else f"{custom_filename}.{format_options.split('.')[-1].strip(')')}" 
-                    st.success(f"Documentation exported as {filename} with your selected settings!")
-            
-            # Integration options
-            st.write("### 3. Integration Options")
-            st.info("In the complete app, you would have options to save to:")
-            
-            integration_cols = st.columns(4)
-            with integration_cols[0]:
-                st.button("📡 SharePoint", disabled=True)
-            with integration_cols[1]:
-                st.button("📝 Notion", disabled=True)
-            with integration_cols[2]:
-                st.button("📊 Confluence", disabled=True)
-            with integration_cols[3]:
-                st.button("📋 Google Docs", disabled=True)
-                
-            # Documentation preview
-            with st.expander("Preview Documentation"):
-                st.markdown(st.session_state.documentation_content)
+                # No preview section needed (already shown in Step 4)
                 
         else:
             st.warning("No documentation has been generated yet. Please generate documentation in Step 3 first.")
@@ -792,11 +816,49 @@ elif st.session_state.show_review:
 
         
         if st.session_state.documentation_generated and st.session_state.documentation_content:
-            # Create tabs for different views
-            preview_tab, raw_tab = st.tabs(["Preview", "Raw Markdown"])
+            # Create tabs for different views - add Docs Directory tab if enabled
+            has_docs_dir = os.path.exists("docs") and os.path.isdir("docs")
+            
+            if has_docs_dir:
+                preview_tab, docs_dir_tab, raw_tab = st.tabs(["Main Documentation", "Docs Directory", "Raw Markdown"])
+            else:
+                preview_tab, raw_tab = st.tabs(["Main Documentation", "Raw Markdown"])
             
             with preview_tab:
                 st.markdown(st.session_state.documentation_content)
+                
+            # Add docs directory tab if it exists
+            if has_docs_dir:
+                with docs_dir_tab:
+                    st.subheader("Generated Documentation Files")
+                    st.info("These files were generated based on your docs directory selection.")
+                    
+                    # Display the docs directory tree
+                    st.subheader("Directory Structure")
+                    docs_path = "docs"
+                    if os.path.exists(docs_path):
+                        # Use the existing display_directory_contents function
+                        display_directory_contents(docs_path)
+                        
+                        # Add buttons to preview each markdown file
+                        st.subheader("Documentation Files")
+                        for root, dirs, files in os.walk(docs_path):
+                            for file in files:
+                                if file.endswith(".md"):
+                                    file_path = os.path.join(root, file)
+                                    relative_path = os.path.relpath(file_path, docs_path)
+                                    
+                                    # Create an expander for each file
+                                    with st.expander(f"📄 {relative_path}"):
+                                        try:
+                                            with open(file_path, "r", encoding="utf-8") as f:
+                                                file_content = f.read()
+                                                st.markdown(file_content)
+                                        except Exception as e:
+                                            st.error(f"Error reading file: {str(e)}")
+                    else:
+                        st.warning("Docs directory not found.")
+            
                 
                 # Add feedback options for parameter tuning
                 st.divider()
@@ -896,6 +958,45 @@ elif st.session_state.lightning_draft_active:
         
         with tab1:
             st.subheader("Content Options")
+
+            docs_dir_enabled = st.checkbox("Add extensive 'docs' directory")
+            
+            # Store the docs directory choice in session state
+            st.session_state.docs_dir_enabled = docs_dir_enabled
+
+            if docs_dir_enabled:
+                # Let user choose which files to include in the docs directory
+                docs_options = st.multiselect(
+                    "Which docs do you want to include?",
+                    ["API Reference", "Examples", "Guides"],
+                    default=["API Reference", "Examples", "Guides"]
+                )
+                
+                # Store selected docs options in session state
+                st.session_state.docs_options = docs_options
+                
+                # Display selected options for debugging
+                st.write("You selected:", docs_options)
+                
+                # Preview of what the docs structure will look like
+                with st.expander("Docs Directory Structure Preview"):
+                    # Build a cleaner directory tree structure
+                    if docs_options:
+                        tree_lines = ["docs/"]
+                        for i, option in enumerate(docs_options):
+                            is_last = i == len(docs_options) - 1
+                            prefix = "└── " if is_last else "├── "
+                            tree_lines.append(f"    {prefix}{option.lower().replace(' ', '_')}.md")
+                        tree_structure = "\n".join(tree_lines)
+                    else:
+                        tree_structure = "docs/\n    (Empty)"
+                    
+                    st.code(tree_structure, language="")
+                    
+            else:
+                st.session_state.docs_options = []
+                st.write("No added 'docs' directory")
+                # continue on as normal
             
             # Primary documentation purpose
             doc_purpose = st.selectbox(
@@ -1198,6 +1299,24 @@ elif st.session_state.lightning_draft_active:
                 st.error(f"Error during AI documentation generation: {e}")
                 generated_documentation = f"Error generating documentation: {e}"
 
+            # Generate additional docs directory content if enabled
+            if st.session_state.get('docs_dir_enabled', False):
+                with st.spinner("Generating docs directory contents..."):
+                    try:
+                        # Get the selected doc types from session state
+                        docs_options = st.session_state.get('docs_options', [])
+                        
+                        # Call the generate_documentation function from test.py
+                        generate_documentation(
+                            docs_options=docs_options,
+                            target_repo="repo",  # Default repo directory
+                            output_dir="docs"    # Default docs directory
+                        )
+                        
+                        st.success(f"Generated docs directory with: {', '.join(docs_options)}")
+                    except Exception as e:
+                        st.error(f"Error generating docs directory: {str(e)}")
+            
             # Save documentation and configuration to session state
             st.session_state.documentation_content = generated_documentation
             st.session_state.documentation_generated = True
